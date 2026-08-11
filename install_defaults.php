@@ -1,7 +1,7 @@
 <?php
 /* Reminder: always indent with 4 spaces (no tabs). */
 // +---------------------------------------------------------------------------+
-// | Maintenance Plugin 1.0.0                                                  |
+// | Maintenance Plugin 1.1.0                                                  |
 // +---------------------------------------------------------------------------+
 // | install_defaults.php                                                      |
 // +---------------------------------------------------------------------------+
@@ -34,7 +34,7 @@ $_MAINTENANCE_DEFAULT['message'] = 'The website is currently under maintenance. 
  */
 function plugin_initconfig_maintenance()
 {
-    global $_MAINTENANCE_DEFAULT;
+    global $_MAINTENANCE_DEFAULT, $_TABLES;
 
     $c = config::get_instance();
 
@@ -44,18 +44,20 @@ function plugin_initconfig_maintenance()
         // Create the main subgroup #0
         $c->add('sg_0', NULL, 'subgroup', 0, 0, NULL, 0, true, 'maintenance');
 
+        // A named tab gives non-Root administrators a configurable permission.
+        $c->add('tab_main', NULL, 'tab', 0, 0, NULL, 0, true, 'maintenance', 0);
+
         // Create the fieldset #1 within subgroup #0
-        $c->add('fs_01', NULL, 'fieldset', 0, 0, NULL, 0, true, 'maintenance');
+        $c->add('fs_01', NULL, 'fieldset', 0, 0, NULL, 0, true, 'maintenance', 0);
 
         // Add configuration fields
-        $c->add('enabled', $_MAINTENANCE_DEFAULT['enabled'], 'select', 0, 0, 0, 10, true, 'maintenance');
-        $c->add('message', $_MAINTENANCE_DEFAULT['message'], 'text', 0, 0, 0, 20, true, 'maintenance');
-    } else {
-        // Log if the configuration group already exists
-        COM_errorLog("Group 'maintenance' already exists.");
+        $c->add('enabled', $_MAINTENANCE_DEFAULT['enabled'], 'select', 0, 0, 0, 10, true, 'maintenance', 0);
+        $c->add('message', $_MAINTENANCE_DEFAULT['message'], 'text', 0, 0, 0, 20, true, 'maintenance', 0);
+    } elseif (DB_count($_TABLES['conf_values'], array('name', 'group_name'),
+        array('tab_main', 'maintenance')) == 0) {
+        // Upgrade from 1.0.0: existing settings already use tab id 0.
+        $c->add('tab_main', NULL, 'tab', 0, 0, NULL, 0, true, 'maintenance', 0);
     }
 
     return true;
 }
-
-?>
