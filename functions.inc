@@ -1,7 +1,7 @@
 <?php
 
 // +---------------------------------------------------------------------------+
-// | Maintenance Plugin 1.1.0                                                  |
+// | Maintenance Plugin 1.1.1                                                  |
 // +---------------------------------------------------------------------------+
 
 if (isset($_SERVER['PHP_SELF']) &&
@@ -60,6 +60,66 @@ function maintenance_is_enabled()
 function maintenance_user_can_bypass()
 {
     return function_exists('SEC_hasRights') && SEC_hasRights('maintenance.admin');
+}
+
+/**
+ * Return a valid BCP 47 language code for standalone HTML documents.
+ *
+ * Geeklog language names are file-oriented values such as "english" or
+ * "french_france", so they cannot be copied directly into <html lang>.
+ *
+ * @return string
+ */
+function maintenance_get_html_language()
+{
+    global $_CONF;
+
+    $language = isset($_CONF['language']) ? strtolower((string) $_CONF['language']) : 'english';
+    $normalized = str_replace('_', '-', $language);
+
+    if (preg_match('/^[a-z]{2}(?:-[a-z]{2})?$/', $normalized)) {
+        return $normalized;
+    }
+
+    $baseName = $normalized;
+    $separator = strpos($normalized, '-');
+    if ($separator !== false) {
+        $baseName = substr($normalized, 0, $separator);
+    }
+
+    $map = array(
+        'english'    => 'en',
+        'french'     => 'fr',
+        'german'     => 'de',
+        'spanish'    => 'es',
+        'italian'    => 'it',
+        'dutch'      => 'nl',
+        'portuguese' => 'pt',
+        'danish'     => 'da',
+        'norwegian'  => 'no',
+        'swedish'    => 'sv',
+        'finnish'    => 'fi',
+        'japanese'   => 'ja'
+    );
+
+    return isset($map[$baseName]) ? $map[$baseName] : 'en';
+}
+
+/**
+ * Return the configured Retry-After value in seconds.
+ *
+ * @return int
+ */
+function maintenance_get_retry_after()
+{
+    $config = maintenance_get_config();
+    $retryAfter = isset($config['retry_after']) ? (int) $config['retry_after'] : 3600;
+
+    if ($retryAfter < 60 || $retryAfter > 86400) {
+        $retryAfter = 3600;
+    }
+
+    return $retryAfter;
 }
 
 /**
@@ -171,7 +231,7 @@ function maintenance_render_page()
     require_once $_CONF['path_system'] . 'lib-template.php';
     $template = new Template($_CONF['path'] . 'plugins/maintenance/templates/');
     $template->set_file('page', 'maintenance.thtml');
-    $template->set_var('language', maintenance_escape(isset($_CONF['language']) ? $_CONF['language'] : 'en'));
+    $template->set_var('language', maintenance_escape(maintenance_get_html_language()));
     $template->set_var('maintenance_title', maintenance_escape($LANG_MAINTENANCE['page_title']));
     $template->set_var('maintenance_message', maintenance_escape($message));
     $template->set_var('current_year', date('Y'));
@@ -194,8 +254,11 @@ function maintenance_send_response()
             ? $_SERVER['SERVER_PROTOCOL']
             : 'HTTP/1.1';
         header($protocol . ' 503 Service Unavailable', true, 503);
-        header('Retry-After: 3600');
+        header('Retry-After: ' . maintenance_get_retry_after());
         header('Content-Type: text/html; charset=UTF-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
     } else {
         COM_errorLog('Maintenance Plugin: unable to send HTTP 503 because headers were already sent.');
     }
@@ -273,7 +336,7 @@ function plugin_compatible_with_this_version_maintenance($pi_name)
  */
 function plugin_getversion_maintenance()
 {
-    return '1.1.0';
+    return '1.1.1';
 }
 
 /**
@@ -283,11 +346,11 @@ function plugin_getversion_maintenance()
  */
 function plugin_chkVersion_maintenance()
 {
-    return '1.1.0';
+    return '1.1.1';
 }
 
 /**
- * Upgrade Maintenance to 1.1.0 without requiring reinstallation.
+ * Upgrade Maintenance to 1.1.1 without requiring reinstallation.
  *
  * @return bool
  */
@@ -299,14 +362,14 @@ function plugin_upgrade_maintenance()
     $installedVersion = DB_getItem($_TABLES['plugins'], 'pi_version',
         "pi_name = 'maintenance'");
 
-    if (version_compare($installedVersion, '1.1.0', '<')) {
+    if (version_compare($installedVersion, '1.1.1', '<')) {
         require_once $_CONF['path'] . 'plugins/maintenance/install_defaults.php';
         if (!plugin_initconfig_maintenance() ||
             !maintenance_install_config_permission() ||
             !maintenance_install_block()) {
             return false;
         }
-        DB_query("UPDATE {$_TABLES['plugins']} SET pi_version = '1.1.0', "
+        DB_query("UPDATE {$_TABLES['plugins']} SET pi_version = '1.1.1', "
             . "pi_gl_version = '2.1.1' WHERE pi_name = 'maintenance'", 1);
         if (DB_error()) {
             COM_errorLog('Maintenance Plugin: failed to update plugin metadata.');
