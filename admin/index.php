@@ -1,7 +1,7 @@
 <?php
 
 // +---------------------------------------------------------------------------+
-// | Maintenance Plugin 1.1.0 - administration                                |
+// | Maintenance Plugin 1.1.1 - administration                                |
 // +---------------------------------------------------------------------------+
 
 require_once dirname(__FILE__) . '/../../../lib-common.php';
