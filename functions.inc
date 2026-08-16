@@ -290,6 +290,43 @@ function phpblock_maintenance_check()
         . maintenance_escape($notice) . '</div>';
 }
 
+/**
+ * Return the icon used by Geeklog's Command and Control screen.
+ *
+ * @return string
+ */
+function plugin_geticon_maintenance()
+{
+    global $_CONF;
+
+    return $_CONF['site_admin_url'] . '/plugins/maintenance/images/maintenance.svg';
+}
+
+/**
+ * Add Maintenance to Geeklog's Command and Control screen (/admin/index.php).
+ *
+ * @return array
+ */
+function plugin_cclabel_maintenance()
+{
+    global $_CONF, $LANG_MAINTENANCE;
+
+    if (!maintenance_user_can_bypass()) {
+        return array();
+    }
+
+    return array(
+        $LANG_MAINTENANCE['plugin_name'],
+        $_CONF['site_admin_url'] . '/plugins/maintenance/index.php',
+        plugin_geticon_maintenance()
+    );
+}
+
+/**
+ * Add Maintenance to the plugin administration menu on admin pages.
+ *
+ * @return array
+ */
 function plugin_getadminoption_maintenance()
 {
     global $_CONF, $LANG_MAINTENANCE;
