@@ -1,7 +1,7 @@
 <?php
 
 // +---------------------------------------------------------------------------+
-// | Maintenance Plugin 1.1.0                                                  |
+// | Maintenance Plugin 1.1.1                                                  |
 // +---------------------------------------------------------------------------+
 
 require_once dirname(__FILE__) . '/functions.inc';
@@ -16,7 +16,7 @@ function plugin_autoinstall_maintenance($pi_name)
         'info' => array(
             'pi_name'         => $piName,
             'pi_display_name' => $displayName,
-            'pi_version'      => '1.1.0',
+            'pi_version'      => '1.1.1',
             'pi_gl_version'   => '2.1.1',
             'pi_homepage'     => 'https://geeklog.net'
         ),
@@ -53,8 +53,9 @@ function plugin_load_configuration_maintenance($pi_name)
 /**
  * Create or repair the optional administrator warning block.
  *
- * Schema detection preserves compatibility with installations whose blocks
- * table still has the legacy tid column.
+ * Existing blocks keep their enabled state, position and permissions. The
+ * executable fields are normalized so upgrades recover from renamed or edited
+ * legacy block definitions without unexpectedly re-enabling a disabled block.
  *
  * @return bool
  */
@@ -74,6 +75,14 @@ function maintenance_install_block()
     if (DB_numRows($blockResult) > 0) {
         $block = DB_fetchArray($blockResult);
         $blockId = (int) $block['bid'];
+
+        DB_query("UPDATE {$_TABLES['blocks']} SET "
+            . "name = 'maintenance_check', type = 'phpblock', "
+            . "phpblockfn = 'phpblock_maintenance_check' WHERE bid = $blockId", 1);
+        if (DB_error()) {
+            COM_errorLog('Maintenance Plugin: failed to repair the warning block.');
+            return false;
+        }
     } else {
         $rootGroupId = (int) DB_getItem($_TABLES['groups'], 'grp_id', "grp_name = 'Root'");
         $rootUserId = (int) DB_getItem($_TABLES['users'], 'uid', "username = 'Admin'");
