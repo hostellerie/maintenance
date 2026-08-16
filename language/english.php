@@ -3,14 +3,22 @@
 $LANG_configsections['maintenance'] = array('label' => 'Maintenance', 'title' => 'Maintenance Plugin Configuration');
 $LANG_confignames['maintenance'] = array(
     'enabled' => 'Enable maintenance mode',
-    'message' => 'Plain-text maintenance message displayed to visitors'
+    'message' => 'Plain-text maintenance message displayed to visitors',
+    'retry_after' => 'Retry-After delay sent with HTTP 503 responses'
 );
 $LANG_configsubgroups['maintenance'] = array('sg_0' => 'Main Settings');
 $LANG_fs['maintenance'] = array('fs_01' => 'Maintenance Plugin Settings');
 $LANG_tab['maintenance'] = array('tab_main' => 'Main Settings');
 $LANG_configselects['maintenance'] = array(
     0 => array('True' => 1, 'False' => 0),
-    1 => array('Enabled' => 1, 'Disabled' => 0)
+    1 => array('Enabled' => 1, 'Disabled' => 0),
+    2 => array(
+        '5 minutes' => 300,
+        '15 minutes' => 900,
+        '30 minutes' => 1800,
+        '1 hour' => 3600,
+        '2 hours' => 7200
+    )
 );
 $LANG_MAINTENANCE = array(
     'plugin_name'     => 'Maintenance',
@@ -27,9 +35,9 @@ $LANG_MAINTENANCE = array(
     'status_disabled' => 'Maintenance mode is currently disabled.',
     'open_configuration' => 'Open configuration',
     'documentation'   => 'Operation',
-    'documentation_text' => 'Authorized users bypass maintenance mode. Blocked requests receive HTTP 503 and Retry-After: 3600. The public maintenance page contains no login form. Operators use the separate Maintenance login URL, which delegates authentication to Geeklog.',
+    'documentation_text' => 'Authorized users bypass maintenance mode. Blocked requests receive HTTP 503, anti-cache headers and the configured Retry-After delay. The public maintenance page contains no login form. Operators use the separate Maintenance login URL, which delegates authentication to Geeklog and uses Geeklog login-form plugin hooks when available.',
     'login_url_title' => 'Authorized login URL',
-    'login_url_help' => 'Save this private operational URL before enabling maintenance mode. It is intentionally absent from the public maintenance page.',
+    'login_url_help' => 'Save this operational URL before enabling maintenance mode. It is intentionally absent from the public maintenance page, but account credentials and Geeklog permissions remain the actual security controls.',
     'login_url_bookmarked' => 'I have saved this URL as a bookmark.',
     'email_login_url' => 'Send this login URL to my account email address.',
     'email_submit' => 'Send the email',
