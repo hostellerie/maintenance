@@ -1,7 +1,7 @@
 <?php
 
 // +---------------------------------------------------------------------------+
-// | Maintenance Plugin 1.1.0                                                  |
+// | Maintenance Plugin 1.1.1                                                  |
 // +---------------------------------------------------------------------------+
 
 if (isset($_SERVER['PHP_SELF']) &&
@@ -21,12 +21,6 @@ if (file_exists($maintenanceLanguageFile)) {
     require_once $maintenancePluginPath . 'language/english.php';
 }
 
-/**
- * Return the current plugin configuration.
- *
- * @param bool $refresh Reload the values from Geeklog's Configuration API
- * @return array
- */
 function maintenance_get_config($refresh = false)
 {
     global $_CONF, $_MAINTENANCE_CONF;
@@ -40,11 +34,6 @@ function maintenance_get_config($refresh = false)
     return is_array($_MAINTENANCE_CONF) ? $_MAINTENANCE_CONF : array();
 }
 
-/**
- * Return whether maintenance mode is enabled.
- *
- * @return bool
- */
 function maintenance_is_enabled()
 {
     $config = maintenance_get_config();
@@ -52,21 +41,123 @@ function maintenance_is_enabled()
     return isset($config['enabled']) && (int) $config['enabled'] === 1;
 }
 
-/**
- * Authorized administrators bypass maintenance mode.
- *
- * @return bool
- */
 function maintenance_user_can_bypass()
 {
     return function_exists('SEC_hasRights') && SEC_hasRights('maintenance.admin');
 }
 
 /**
- * Return the normalized basename of the executing Geeklog script.
+ * Return a valid BCP 47 language code for standalone HTML documents.
  *
  * @return string
  */
+function maintenance_get_html_language()
+{
+    global $_CONF;
+
+    $language = isset($_CONF['language']) ? strtolower((string) $_CONF['language']) : 'english';
+    $normalized = str_replace('_', '-', $language);
+
+    if (preg_match('/^[a-z]{2}(?:-[a-z]{2})?$/', $normalized)) {
+        return $normalized;
+    }
+
+    $baseName = $normalized;
+    $separator = strpos($normalized, '-');
+    if ($separator !== false) {
+        $baseName = substr($normalized, 0, $separator);
+    }
+
+    $map = array(
+        'english'    => 'en',
+        'french'     => 'fr',
+        'german'     => 'de',
+        'spanish'    => 'es',
+        'italian'    => 'it',
+        'dutch'      => 'nl',
+        'portuguese' => 'pt',
+        'danish'     => 'da',
+        'norwegian'  => 'no',
+        'swedish'    => 'sv',
+        'finnish'    => 'fi',
+        'japanese'   => 'ja'
+    );
+
+    return isset($map[$baseName]) ? $map[$baseName] : 'en';
+}
+
+function maintenance_get_retry_after()
+{
+    $config = maintenance_get_config();
+    $retryAfter = isset($config['retry_after']) ? (int) $config['retry_after'] : 3600;
+
+    if ($retryAfter < 60 || $retryAfter > 86400) {
+        $retryAfter = 3600;
+    }
+
+    return $retryAfter;
+}
+
+/**
+ * Create the signature used by the standalone login anti-bot guard.
+ *
+ * This is deliberately stateless so it remains compatible with Geeklog's
+ * session implementation across the supported versions. It is not an
+ * authentication token; Geeklog still performs the actual authentication.
+ *
+ * @param int $started Unix timestamp when the form was rendered
+ * @return string
+ */
+function maintenance_create_login_guard($started)
+{
+    global $_CONF;
+
+    $secret = (isset($_CONF['path']) ? $_CONF['path'] : '')
+        . '|' . (isset($_CONF['path_data']) ? $_CONF['path_data'] : '')
+        . '|' . (isset($_CONF['site_admin_url']) ? $_CONF['site_admin_url'] : '')
+        . '|maintenance-login-guard';
+
+    return hash_hmac('sha256', (string) (int) $started, hash('sha256', $secret));
+}
+
+/**
+ * Validate the silent anti-bot fields from the standalone login form.
+ *
+ * A valid request must contain an empty honeypot, an untampered timestamp,
+ * and must be submitted between 1 second and 30 minutes after rendering.
+ *
+ * @return bool
+ */
+function maintenance_login_guard_is_valid()
+{
+    if (!isset($_POST['maintenance_contact']) ||
+        trim((string) $_POST['maintenance_contact']) !== '' ||
+        empty($_POST['maintenance_started']) ||
+        empty($_POST['maintenance_guard'])) {
+        return false;
+    }
+
+    $started = (string) $_POST['maintenance_started'];
+    if (!ctype_digit($started)) {
+        return false;
+    }
+
+    $started = (int) $started;
+    $elapsed = time() - $started;
+    if ($started < 1 || $elapsed < 1 || $elapsed > 1800) {
+        return false;
+    }
+
+    $expected = maintenance_create_login_guard($started);
+    $provided = (string) $_POST['maintenance_guard'];
+
+    if (function_exists('hash_equals')) {
+        return hash_equals($expected, $provided);
+    }
+
+    return $expected === $provided;
+}
+
 function maintenance_get_script_name()
 {
     $script = '';
@@ -81,7 +172,7 @@ function maintenance_get_script_name()
 }
 
 /**
- * Allow only a real login POST to Geeklog's configured admin entry point.
+ * Allow only a genuine submission from the standalone Maintenance login form.
  *
  * @return bool
  */
@@ -91,7 +182,8 @@ function maintenance_is_admin_login_request()
 
     if (!isset($_SERVER['REQUEST_METHOD']) ||
         strtoupper($_SERVER['REQUEST_METHOD']) !== 'POST' ||
-        empty($_POST['loginname']) || empty($_POST['passwd'])) {
+        empty($_POST['loginname']) || empty($_POST['passwd']) ||
+        !maintenance_login_guard_is_valid()) {
         return false;
     }
 
@@ -107,11 +199,6 @@ function maintenance_is_admin_login_request()
     return $scriptPath === $expectedPath;
 }
 
-/**
- * Allow the standalone, unadvertised Maintenance login page.
- *
- * @return bool
- */
 function maintenance_is_login_page_request()
 {
     global $_CONF;
@@ -128,11 +215,6 @@ function maintenance_is_login_page_request()
     return str_replace('\\', '/', $scriptPath) === $expectedPath;
 }
 
-/**
- * Keep only Geeklog's authentication endpoint available to blocked visitors.
- *
- * @return bool
- */
 function maintenance_request_is_allowed()
 {
     if (!maintenance_is_enabled() || maintenance_user_can_bypass()) {
@@ -142,22 +224,11 @@ function maintenance_request_is_allowed()
     return maintenance_is_login_page_request() || maintenance_is_admin_login_request();
 }
 
-/**
- * Escape configured values because the maintenance message is plain text.
- *
- * @param string $value
- * @return string
- */
 function maintenance_escape($value)
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-/**
- * Render the standalone maintenance page.
- *
- * @return string
- */
 function maintenance_render_page()
 {
     global $_CONF, $LANG_MAINTENANCE;
@@ -171,7 +242,7 @@ function maintenance_render_page()
     require_once $_CONF['path_system'] . 'lib-template.php';
     $template = new Template($_CONF['path'] . 'plugins/maintenance/templates/');
     $template->set_file('page', 'maintenance.thtml');
-    $template->set_var('language', maintenance_escape(isset($_CONF['language']) ? $_CONF['language'] : 'en'));
+    $template->set_var('language', maintenance_escape(maintenance_get_html_language()));
     $template->set_var('maintenance_title', maintenance_escape($LANG_MAINTENANCE['page_title']));
     $template->set_var('maintenance_message', maintenance_escape($message));
     $template->set_var('current_year', date('Y'));
@@ -182,11 +253,6 @@ function maintenance_render_page()
     return $template->finish($template->get_var('output'));
 }
 
-/**
- * Send the maintenance response and stop the request.
- *
- * @return void
- */
 function maintenance_send_response()
 {
     if (!headers_sent()) {
@@ -194,8 +260,11 @@ function maintenance_send_response()
             ? $_SERVER['SERVER_PROTOCOL']
             : 'HTTP/1.1';
         header($protocol . ' 503 Service Unavailable', true, 503);
-        header('Retry-After: 3600');
+        header('Retry-After: ' . maintenance_get_retry_after());
         header('Content-Type: text/html; charset=UTF-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
     } else {
         COM_errorLog('Maintenance Plugin: unable to send HTTP 503 because headers were already sent.');
     }
@@ -204,12 +273,6 @@ function maintenance_send_response()
     exit;
 }
 
-/**
- * The legacy PHP block is retained only as an administrator warning banner.
- * Access control runs when this functions.inc file is loaded by lib-common.php.
- *
- * @return string
- */
 function phpblock_maintenance_check()
 {
     global $LANG_MAINTENANCE;
@@ -228,7 +291,39 @@ function phpblock_maintenance_check()
 }
 
 /**
- * Add Maintenance to Command and Control.
+ * Return the icon used by Geeklog's Command and Control screen.
+ *
+ * @return string
+ */
+function plugin_geticon_maintenance()
+{
+    global $_CONF;
+
+    return $_CONF['site_admin_url'] . '/plugins/maintenance/images/maintenance.svg';
+}
+
+/**
+ * Add Maintenance to Geeklog's Command and Control screen (/admin/index.php).
+ *
+ * @return array
+ */
+function plugin_cclabel_maintenance()
+{
+    global $_CONF, $LANG_MAINTENANCE;
+
+    if (!maintenance_user_can_bypass()) {
+        return array();
+    }
+
+    return array(
+        $LANG_MAINTENANCE['plugin_name'],
+        $_CONF['site_admin_url'] . '/plugins/maintenance/index.php',
+        plugin_geticon_maintenance()
+    );
+}
+
+/**
+ * Add Maintenance to the plugin administration menu on admin pages.
  *
  * @return array
  */
@@ -247,12 +342,6 @@ function plugin_getadminoption_maintenance()
     );
 }
 
-/**
- * Check plugin compatibility with Geeklog 2.1.1 or later.
- *
- * @param string $pi_name
- * @return bool
- */
 function plugin_compatible_with_this_version_maintenance($pi_name)
 {
     if (!defined('VERSION')) {
@@ -266,31 +355,16 @@ function plugin_compatible_with_this_version_maintenance($pi_name)
     return version_compare(VERSION, '2.1.1', '>=');
 }
 
-/**
- * Return the version supplied by the plugin files.
- *
- * @return string
- */
 function plugin_getversion_maintenance()
 {
-    return '1.1.0';
+    return '1.1.1';
 }
 
-/**
- * Geeklog's standard code-version hook.
- *
- * @return string
- */
 function plugin_chkVersion_maintenance()
 {
-    return '1.1.0';
+    return '1.1.1';
 }
 
-/**
- * Upgrade Maintenance to 1.1.0 without requiring reinstallation.
- *
- * @return bool
- */
 function plugin_upgrade_maintenance()
 {
     global $_CONF, $_TABLES;
@@ -299,14 +373,14 @@ function plugin_upgrade_maintenance()
     $installedVersion = DB_getItem($_TABLES['plugins'], 'pi_version',
         "pi_name = 'maintenance'");
 
-    if (version_compare($installedVersion, '1.1.0', '<')) {
+    if (version_compare($installedVersion, '1.1.1', '<')) {
         require_once $_CONF['path'] . 'plugins/maintenance/install_defaults.php';
         if (!plugin_initconfig_maintenance() ||
             !maintenance_install_config_permission() ||
             !maintenance_install_block()) {
             return false;
         }
-        DB_query("UPDATE {$_TABLES['plugins']} SET pi_version = '1.1.0', "
+        DB_query("UPDATE {$_TABLES['plugins']} SET pi_version = '1.1.1', "
             . "pi_gl_version = '2.1.1' WHERE pi_name = 'maintenance'", 1);
         if (DB_error()) {
             COM_errorLog('Maintenance Plugin: failed to update plugin metadata.');
@@ -317,11 +391,6 @@ function plugin_upgrade_maintenance()
     return true;
 }
 
-/**
- * Uninstall metadata plus explicit cleanup for the block topic assignment.
- *
- * @return array
- */
 function plugin_autouninstall_maintenance()
 {
     global $_TABLES;
@@ -347,8 +416,6 @@ function plugin_autouninstall_maintenance()
     );
 }
 
-// Every normal Geeklog request loads active plugin functions here, before the
-// requested script starts producing page output. Authentication remains open.
 if (!defined('GL_INSTALL_ACTIVE') && !maintenance_request_is_allowed()) {
     maintenance_send_response();
 }
