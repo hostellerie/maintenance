@@ -7,21 +7,27 @@
     <title>{login_summary}</title>
     <style>
         body { align-items:center; background:#f4f4f4; color:#333; display:flex; font-family:Arial,sans-serif; justify-content:center; margin:0; min-height:100vh; }
-        main { background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,.1); box-sizing:border-box; max-width:380px; padding:35px; width:calc(100% - 20px); }
+        main { background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,.1); box-sizing:border-box; max-width:420px; padding:35px; width:calc(100% - 20px); }
         h1 { font-size:22px; margin:0 0 22px; text-align:center; }
         form { display:grid; gap:14px; }
         label { font-size:14px; }
         input { border:1px solid #aaa; border-radius:4px; box-sizing:border-box; display:block; margin-top:5px; padding:10px; width:100%; }
         button { background:#555; border:0; border-radius:4px; color:#fff; cursor:pointer; padding:11px; }
+        .login-unavailable { margin-bottom:18px; }
     </style>
 </head>
 <body>
     <main>
         <h1>{login_summary}</h1>
-        <form method="post" action="{login_action}">
+        <p class="login-unavailable">{login_unavailable}</p>
+        <form method="post" action="{login_action}" id="userloginform">
             <label>{login_name}<input type="text" name="loginname" autocomplete="username" required autofocus></label>
             <label>{login_password}<input type="password" name="passwd" autocomplete="current-password" required></label>
-            <button type="submit">{login_submit}</button>
+            {captcha}
+            <button type="submit" name="mode" value="login" class="g-recaptcha"{invisible_recaptcha}>{login_submit}</button>
+            {recaptcha_v3}
+            <input type="hidden" name="mode" value="login">
+            <input type="hidden" name="warn" value="1">
         </form>
     </main>
 </body>
