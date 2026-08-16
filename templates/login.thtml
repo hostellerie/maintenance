@@ -14,6 +14,7 @@
         input { border:1px solid #aaa; border-radius:4px; box-sizing:border-box; display:block; margin-top:5px; padding:10px; width:100%; }
         button { background:#555; border:0; border-radius:4px; color:#fff; cursor:pointer; padding:11px; }
         .login-unavailable { margin-bottom:18px; }
+        .maintenance-hp { height:1px; left:-10000px; overflow:hidden; position:absolute; top:auto; width:1px; }
     </style>
 </head>
 <body>
@@ -23,11 +24,16 @@
         <form method="post" action="{login_action}" id="userloginform">
             <label>{login_name}<input type="text" name="loginname" autocomplete="username" required autofocus></label>
             <label>{login_password}<input type="password" name="passwd" autocomplete="current-password" required></label>
+            <div class="maintenance-hp" aria-hidden="true">
+                <label>Leave this field empty<input type="text" name="maintenance_contact" value="" tabindex="-1" autocomplete="off"></label>
+            </div>
             {captcha}
             <button type="submit" name="mode" value="login" class="g-recaptcha"{invisible_recaptcha}>{login_submit}</button>
             {recaptcha_v3}
             <input type="hidden" name="mode" value="login">
             <input type="hidden" name="warn" value="1">
+            <input type="hidden" name="maintenance_started" value="{login_started}">
+            <input type="hidden" name="maintenance_guard" value="{login_guard}">
         </form>
     </main>
 </body>
